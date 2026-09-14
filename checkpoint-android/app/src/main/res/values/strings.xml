@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Checkpoint</string>
+    <string name="accessibility_description">Checkpoint monitors reel scrolling and chat sessions on Instagram, YouTube Shorts, TikTok, WhatsApp, and Snapchat to prompt you with JEE/NEET AI questions before you keep scrolling.</string>
+</resources>

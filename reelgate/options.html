@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Checkpoint syllabus</title>
+<link rel="stylesheet" href="ui.css">
+<style>
+  body { padding: 36px 24px 60px; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  .lede { font-size: 15px; line-height: 1.6; color: var(--muted); max-width: 62ch; margin-bottom: 26px; }
+  .bar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .bar .stack { margin-bottom: 0; }
+  .bar .stack input, .bar .stack select { width: 180px; }
+  form.add {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px;
+    padding: 18px; margin-bottom: 26px; background: #fff; border: 1px solid var(--line);
+  }
+  form.add .full { grid-column: 1 / -1; }
+  form.add .stack { margin-bottom: 0; }
+  .subject { margin-top: 26px; }
+  .subject h3 {
+    font-family: Georgia, serif; font-size: 17px; font-weight: normal;
+    padding-bottom: 7px; margin-bottom: 10px; border-bottom: 1px solid var(--line);
+  }
+  .topic {
+    display: flex; align-items: center; gap: 12px; padding: 9px 12px; margin-bottom: 5px;
+    background: #fff; border: 1px solid var(--line); font-size: 14px;
+  }
+  .topic.off { opacity: 0.45; }
+  .topic .name { flex: 1; }
+  .topic .unit { display: block; font-size: 12px; color: var(--muted); }
+  .topic .num { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .empty { padding: 26px; background: #fff; border: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+  .danger-zone { margin-top: 40px; padding: 20px; border: 1px solid rgba(168, 52, 42, 0.3); background: #fff; }
+  .danger-zone h3 { color: var(--red); font-size: 14px; margin-bottom: 8px; }
+  .danger-zone p { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Syllabus</h1>
+  <p class="lede">Questions are only ever written about topics listed here. Type a mode name that
+    doesn't exist yet and you've made a new one — that's how a custom test syllabus works.</p>
+
+  <div class="bar">
+    <label class="stack" for="modeFilter"><span>Mode</span>
+      <select id="modeFilter"></select></label>
+    <button class="ghost" id="generate">Generate a batch now</button>
+    <span class="status" id="status"></span>
+  </div>
+
+  <form class="add" id="addForm">
+    <label class="stack"><span>Mode</span>
+      <input type="text" id="f-mode" placeholder="jee, neet, or your own" required></label>
+    <label class="stack"><span>Subject</span>
+      <input type="text" id="f-subject" placeholder="Chemistry" required></label>
+    <label class="stack"><span>Unit (optional)</span>
+      <input type="text" id="f-unit" placeholder="Physical"></label>
+    <label class="stack"><span>Topic</span>
+      <input type="text" id="f-topic" placeholder="Electrochemistry" required></label>
+    <label class="stack full"><span>Notes for the question writer (optional)</span>
+      <textarea id="f-notes" placeholder="Stick to Nernst equation and cell EMF. No electrolysis numericals."></textarea></label>
+    <label class="stack"><span>Difficulty</span>
+      <select id="f-difficulty">
+        <option value="1">Easy</option>
+        <option value="2" selected>Moderate</option>
+        <option value="3">Hard</option>
+      </select></label>
+    <div class="full"><button type="submit">Add topic</button></div>
+  </form>
+
+  <div id="list"></div>
+
+  <div class="danger-zone">
+    <h3>Privacy & Account Data</h3>
+    <p>Deleting your account permanently removes your email address, study record, topic exclusions, and personal syllabus entries. Questions you generated remain in the shared question bank.</p>
+    <button id="deleteAccount" style="background: var(--red);">Delete my account and data</button>
+  </div>
+</div>
+<script src="options.js"></script>
+</body>
+</html>

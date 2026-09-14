@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="ui.css">
+<style>
+  body { width: 340px; }
+  .pad { padding: 18px 20px 22px; }
+  .switch { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; }
+  .weak { font-size: 13px; line-height: 1.6; margin-top: 10px; }
+  .weak div { display: flex; justify-content: space-between; gap: 10px; }
+  .weak span { color: var(--muted); }
+  .account-box { padding: 10px 12px; background: #fff; border: 1px solid var(--line); margin-bottom: 13px; font-size: 13px; }
+  .account-box div { display: flex; justify-content: space-between; align-items: center; }
+  .account-box p { color: var(--muted); font-size: 12px; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="pad">
+  <h1>Checkpoint
+    <span class="switch"><input type="checkbox" id="enabled"><label for="enabled">On</label></span>
+  </h1>
+
+  <label class="stack" for="mode"><span>Questions come from</span>
+    <select id="mode"></select>
+  </label>
+
+  <h2>Gating</h2>
+  <div class="row">
+    <label for="reelsPerQuestion">Reels between questions
+      <span class="hint">1 means a question before every reel</span></label>
+    <input type="number" id="reelsPerQuestion" min="1" max="50">
+  </div>
+  <div class="row">
+    <label for="chatMinutes">Minutes of chat before a question</label>
+    <input type="number" id="chatMinutes" min="1" max="120">
+  </div>
+  <div class="row">
+    <label for="answerDelaySec">Seconds before answers unlock
+      <span class="hint">Stops reflex tapping</span></label>
+    <input type="number" id="answerDelaySec" min="0" max="15" step="0.5">
+  </div>
+  <div class="row">
+    <label for="requireNewOnWrong">A wrong answer brings a new question</label>
+    <input type="checkbox" id="requireNewOnWrong">
+  </div>
+
+  <h2>Account & Server</h2>
+  <label class="stack" for="apiUrl"><span>Worker URL</span>
+    <input type="text" id="apiUrl" placeholder="https://checkpoint-api.sohum123451.workers.dev"></label>
+
+  <div id="authContainer" class="account-box">
+    <div id="authSignedOut">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="color: var(--muted);">Not signed in</span>
+        <button id="signIn">Sign in with Google</button>
+      </div>
+    </div>
+    <div id="authSignedIn" style="display:none;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <b id="userEmail" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 190px;">user@example.com</b>
+        <button class="ghost" id="signOut">Sign out</button>
+      </div>
+      <p id="quotaInfo">Generations today: 0 / 40</p>
+    </div>
+  </div>
+
+  <div class="row" style="justify-content: flex-start; gap: 8px;">
+    <button id="check">Check connection</button>
+    <button class="ghost" id="syllabus">Edit syllabus</button>
+  </div>
+  <p class="status" id="status"></p>
+
+  <h2>Your record</h2>
+  <div class="stats">
+    <div class="stat"><b id="s-answered">0</b><span>answered</span></div>
+    <div class="stat"><b id="s-accuracy">—</b><span>correct</span></div>
+    <div class="stat"><b id="s-streak">0</b><span>best streak</span></div>
+  </div>
+  <div class="weak" id="weak"></div>
+  <p class="status"><button class="link" id="reset">Clear my record</button></p>
+</div>
+<script src="popup.js"></script>
+</body>
+</html>

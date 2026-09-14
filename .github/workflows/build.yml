@@ -1,0 +1,41 @@
+name: Build Extension & Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Zip Extension
+        run: |
+          cd reelgate
+          zip -r ../checkpoint-extension.zip .
+      - name: Upload Extension Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Checkpoint-Extension
+          path: checkpoint-extension.zip
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Build Android APK
+        run: |
+          cd checkpoint-android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Checkpoint-Android-APK
+          path: checkpoint-android/app/build/outputs/apk/debug/app-debug.apk

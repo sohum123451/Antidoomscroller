@@ -1,0 +1,64 @@
+{
+  "manifest_version": 3,
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAid3BV9VeVknF+CIxZ3Gj+wRwyY0+DeON/4Q0FwPBsZ0wzBnDSZ/P+R3MgYPHnLv5BgnwLnAdpWPaNKd0R6oKpmedMLDtTveWyWUsbMrPfz0n+pXRhrtYcmU2ot2oyVWCqjzDZQx/F6MW5C/0tJ3Egq5xXasOHLsRkg+LPbaTGdeFNpmaYlxsZKeVOYnncKPX8UMJe/nTLT43xfG7gzroIvEKKldQMdVGmBC0B9YHxfFhUmMQxYllI/CZZCcCXbCjjFswF+J8vwoN3aPwcionjGS6h5MWUckP60GK09avTS8ViXWeEHIraTjk2YQ7wuVEAY2XwOMtNcBH5NKqoF/vKwIDAQAB",
+  "name": "Checkpoint",
+  "version": "0.1.0",
+  "description": "Answer a question before the next reel, and before you keep chatting.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "identity"
+  ],
+  "oauth2": {
+    "client_id": "26126776554-2dmsuofnmvm67eamo70sdinga0ibflde.apps.googleusercontent.com",
+    "scopes": [
+      "openid",
+      "email",
+      "profile"
+    ]
+  },
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "*://*.instagram.com/*",
+    "*://*.facebook.com/*",
+    "*://*.tiktok.com/*",
+    "*://*.snapchat.com/*",
+    "*://web.whatsapp.com/*",
+    "*://*.discord.com/*",
+    "*://web.telegram.org/*",
+    "*://*.messenger.com/*",
+    "*://*.reddit.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://*.instagram.com/*",
+        "*://*.facebook.com/*",
+        "*://*.tiktok.com/*",
+        "*://*.snapchat.com/*",
+        "*://web.whatsapp.com/*",
+        "*://*.discord.com/*",
+        "*://web.telegram.org/*",
+        "*://*.messenger.com/*",
+        "*://*.reddit.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Checkpoint"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  }
+}

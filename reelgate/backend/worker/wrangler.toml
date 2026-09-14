@@ -1,0 +1,30 @@
+name = "checkpoint-api"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+# Refills the question pool on its own. Also the thing that keeps a free Turso
+# database from being archived after 10 idle days.
+[triggers]
+crons = ["0 */2 * * *"]
+
+# Secrets — set these with `wrangler secret put <NAME>`, never in this file:
+#   GEMINI_API_KEY
+#   TURSO_URL          e.g. libsql://checkpoint-yourname.turso.io
+#   TURSO_TOKEN
+#   (DEVICE_TOKEN is gone in v2 — people sign in with Google instead)
+
+[vars]
+# Model IDs change often. List what your key can reach with:
+#   curl "https://generativelanguage.googleapis.com/v1beta/models?key=$GEMINI_API_KEY"
+# The "-latest" aliases move with Google's releases, so they age better than
+# a pinned version.
+GEMINI_MODEL = "gemini-flash-lite-latest"
+GEMINI_EMBED_MODEL = "gemini-embedding-001"
+
+# Cosine distance below which a new question counts as a duplicate.
+# Lower = stricter = more regeneration. 0.12 is a reasonable start.
+DEDUP_DISTANCE = "0.12"
+
+# Comma separated OAuth client IDs allowed to sign in. One per client:
+# the Chrome extension has its own, the Android app has its own.
+GOOGLE_CLIENT_IDS = "26126776554-2dmsuofnmvm67eamo70sdinga0ibflde.apps.googleusercontent.com,26126776554-7qnf73gi14tes8od19jr2su54khdm774.apps.googleusercontent.com"

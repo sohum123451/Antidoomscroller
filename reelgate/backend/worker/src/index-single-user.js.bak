@@ -1,0 +1,364 @@
+import { Turso } from "./turso.js";
+import { generateQuestions, embed } from "./gemini.js";
+
+const POOL_MIN = 12;      // top up when a mode's unseen pool drops below this
+const BATCH = 6;          // questions requested from Gemini per generation call
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS"
+};
+
+const json = (data, status = 200) =>
+  new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json", ...CORS }
+  });
+
+async function stemHash(stem) {
+  const norm = stem.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(norm));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/* ------------------------------------------------------------------
+ * Which topic gets generated next.
+ * Topics you get wrong come up more. Topics already stocked come up less.
+ * ---------------------------------------------------------------- */
+async function pickTopic(db, mode) {
+  const rows = await db.query(
+    `SELECT s.id, s.subject, s.unit, s.topic, s.notes, s.difficulty,
+            ts.accuracy, ts.attempts,
+            (SELECT COUNT(*) FROM questions q
+              WHERE q.syllabus_id = s.id AND q.served_at IS NULL) AS pooled
+       FROM syllabus s
+       JOIN topic_strength ts ON ts.syllabus_id = s.id
+      WHERE s.mode = ? AND s.active = 1`,
+    [mode]
+  );
+  if (!rows.length) return null;
+
+  const weighted = rows.map((r) => {
+    const acc = r.accuracy === null ? 0.5 : r.accuracy;
+    const weakness = 1 - acc + 0.25;          // never zero, so nothing starves
+    const stocked = 1 + (r.pooled || 0) * 1.5; // already have some? deprioritise
+    return { row: r, w: weakness / stocked };
+  });
+
+  const total = weighted.reduce((s, x) => s + x.w, 0);
+  let pick = Math.random() * total;
+  for (const x of weighted) {
+    pick -= x.w;
+    if (pick <= 0) return x.row;
+  }
+  return weighted[weighted.length - 1].row;
+}
+
+/* ------------------------------------------------------------------
+ * Generate one batch for one topic, rejecting anything too close to a
+ * question that already exists.
+ * ---------------------------------------------------------------- */
+async function generateBatch(env, db, mode) {
+  const topic = await pickTopic(db, mode);
+  if (!topic) return { generated: 0, reason: "no active syllabus topics for this mode" };
+
+  const prior = await db.query(
+    `SELECT stem FROM questions WHERE syllabus_id = ? ORDER BY created_at DESC LIMIT 40`,
+    [topic.id]
+  );
+
+  const drafts = await generateQuestions(env, {
+    subject: topic.subject,
+    unit: topic.unit,
+    topic: topic.topic,
+    notes: topic.notes,
+    difficulty: topic.difficulty,
+    count: BATCH,
+    avoid: prior.map((p) => p.stem)
+  });
+  if (!drafts.length) return { generated: 0, reason: "model returned nothing usable" };
+
+  const vectors = await embed(env, drafts.map((d) => d.stem)).catch(() => []);
+  const threshold = parseFloat(env.DEDUP_DISTANCE || "0.12");
+  const hashes = await Promise.all(drafts.map((d) => stemHash(d.stem)));
+
+  // Cloudflare's free plan allows 50 external subrequests per invocation, so
+  // every duplicate check for the batch goes down one pipeline, not one each.
+  const checks = [];
+  drafts.forEach((d, i) => {
+    checks.push([`SELECT 1 AS hit FROM questions WHERE stem_hash = ? LIMIT 1`, [hashes[i]]]);
+    checks.push(
+      vectors[i]
+        ? [
+            `SELECT MIN(vector_distance_cos(embedding, vector32(?))) AS d
+               FROM questions WHERE syllabus_id = ? AND embedding IS NOT NULL`,
+            [JSON.stringify(vectors[i]), topic.id]
+          ]
+        : [`SELECT NULL AS d`, []]
+    );
+  });
+  const results = await db.batch(checks);
+
+  const cosine = (a, b) => {
+    let dot = 0;
+    for (let i = 0; i < a.length; i++) dot += a[i] * b[i];
+    return 1 - dot; // both vectors are unit length
+  };
+
+  const keep = [];
+  let rejected = 0;
+
+  for (let i = 0; i < drafts.length; i++) {
+    const exact = results[i * 2].rows.length > 0;
+    const near = results[i * 2 + 1].rows[0]?.d;
+    const vec = vectors[i];
+
+    // Against what is already stored...
+    if (exact || (near !== null && near !== undefined && near < threshold)) {
+      rejected++;
+      continue;
+    }
+    // ...and against the rest of this same batch, which the database has not
+    // seen yet. Without this, one generation can hand you the same question twice.
+    if (
+      keep.some(
+        (k) => k.hash === hashes[i] || (vec && k.vec && cosine(vec, k.vec) < threshold)
+      )
+    ) {
+      rejected++;
+      continue;
+    }
+    keep.push({ draft: drafts[i], hash: hashes[i], vec });
+  }
+
+  if (keep.length) {
+    await db.batch(
+      keep.map(({ draft: d, hash, vec }) => [
+        `INSERT INTO questions
+           (syllabus_id, mode, stem, stem_hash, options, answer_index, explanation, difficulty, embedding)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${vec ? "vector32(?)" : "NULL"})`,
+        [
+          topic.id,
+          mode,
+          d.stem,
+          hash,
+          JSON.stringify(d.options),
+          d.answer_index,
+          d.explanation,
+          Math.min(3, Math.max(1, d.difficulty || 2)),
+          ...(vec ? [JSON.stringify(vec)] : [])
+        ]
+      ])
+    );
+  }
+
+  return { generated: keep.length, rejected, topic: topic.topic };
+}
+
+async function poolSize(db, mode) {
+  const r = await db.one(
+    `SELECT COUNT(*) AS n FROM questions WHERE mode = ? AND served_at IS NULL`,
+    [mode]
+  );
+  return r ? r.n : 0;
+}
+
+/* ------------------------------------------------------------------ */
+
+export default {
+  /**
+   * Cron. Keeps the pool stocked whether or not a device is awake, and the
+   * regular traffic stops Turso archiving the database for inactivity.
+   */
+  async scheduled(event, env, ctx) {
+    const db = new Turso(env.TURSO_URL, env.TURSO_TOKEN);
+    const modes = await db.query(
+      `SELECT DISTINCT mode FROM syllabus WHERE active = 1 ORDER BY mode LIMIT 3`
+    );
+    for (const { mode } of modes) {
+      if ((await poolSize(db, mode)) < POOL_MIN) {
+        await generateBatch(env, db, mode).catch(() => {});
+      }
+    }
+  },
+
+  async fetch(request, env, ctx) {
+    if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
+
+    const url = new URL(request.url);
+    const path = url.pathname.replace(/\/+$/, "");
+
+    if (path === "/v1/health") return json({ ok: true });
+
+    const auth = request.headers.get("Authorization") || "";
+    if (auth !== `Bearer ${env.DEVICE_TOKEN}`) return json({ error: "unauthorized" }, 401);
+
+    const db = new Turso(env.TURSO_URL, env.TURSO_TOKEN);
+    const body = request.method === "POST" ? await request.json().catch(() => ({})) : {};
+
+    try {
+      /* ---- serve questions ------------------------------------- */
+      if (path === "/v1/questions/next" && request.method === "POST") {
+        const mode = body.mode || "jee";
+        const want = Math.min(10, Math.max(1, body.count || 1));
+
+        let available = await poolSize(db, mode);
+        if (available < want) {
+          // Nothing to hand over — the caller has to wait for a generation.
+          const out = await generateBatch(env, db, mode);
+          if (!out.generated && !available) {
+            return json({ questions: [], error: out.reason || "pool empty" }, 503);
+          }
+          available = await poolSize(db, mode);
+        }
+
+        const rows = await db.query(
+          `SELECT q.id, q.stem, q.options, q.answer_index, q.explanation, q.difficulty,
+                  s.subject, s.topic, s.id AS syllabus_id
+             FROM questions q
+             JOIN syllabus s ON s.id = q.syllabus_id
+            WHERE q.mode = ? AND q.served_at IS NULL
+            ORDER BY RANDOM() LIMIT ?`,
+          [mode, want]
+        );
+
+        if (rows.length) {
+          await db.run(
+            `UPDATE questions SET served_at = unixepoch() WHERE id IN (${rows.map(() => "?").join(",")})`,
+            rows.map((r) => r.id)
+          );
+        }
+
+        // Refill in the background so the next request is instant.
+        if (available - rows.length < POOL_MIN) {
+          ctx.waitUntil(generateBatch(env, db, mode).catch(() => {}));
+        }
+
+        return json({
+          questions: rows.map((r) => ({
+            id: r.id,
+            syllabusId: r.syllabus_id,
+            subject: r.subject,
+            topic: r.topic,
+            stem: r.stem,
+            options: JSON.parse(r.options),
+            answerIndex: r.answer_index,
+            explanation: r.explanation,
+            difficulty: r.difficulty
+          })),
+          pool: available - rows.length
+        });
+      }
+
+      /* ---- record an answer ------------------------------------ */
+      if (path === "/v1/attempts" && request.method === "POST") {
+        const q = await db.one(`SELECT syllabus_id FROM questions WHERE id = ?`, [body.questionId]);
+        if (!q) return json({ error: "unknown question" }, 404);
+        await db.run(
+          `INSERT INTO attempts
+             (question_id, syllabus_id, chosen_index, correct, gate_kind, latency_ms, device)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            body.questionId,
+            q.syllabus_id,
+            body.chosen ?? null,
+            body.correct ? 1 : 0,
+            body.gate || null,
+            body.latencyMs ?? null,
+            body.device || "extension"
+          ]
+        );
+        return json({ ok: true });
+      }
+
+      /* ---- syllabus -------------------------------------------- */
+      if (path === "/v1/syllabus" && request.method === "GET") {
+        const mode = url.searchParams.get("mode");
+        const rows = await db.query(
+          `SELECT s.*, ts.attempts, ts.accuracy,
+                  (SELECT COUNT(*) FROM questions q WHERE q.syllabus_id = s.id) AS written
+             FROM syllabus s
+             JOIN topic_strength ts ON ts.syllabus_id = s.id
+            ${mode ? "WHERE s.mode = ?" : ""}
+            ORDER BY s.mode, s.subject, s.unit, s.topic`,
+          mode ? [mode] : []
+        );
+        return json({ syllabus: rows });
+      }
+
+      if (path === "/v1/syllabus" && request.method === "POST") {
+        if (body.delete) {
+          await db.run(`DELETE FROM syllabus WHERE id = ?`, [body.delete]);
+          return json({ ok: true });
+        }
+        if (body.toggle) {
+          await db.run(`UPDATE syllabus SET active = 1 - active WHERE id = ?`, [body.toggle]);
+          return json({ ok: true });
+        }
+        if (!body.mode || !body.subject || !body.topic) {
+          return json({ error: "mode, subject and topic are required" }, 400);
+        }
+        await db.run(
+          `INSERT INTO syllabus (mode, subject, unit, topic, notes, difficulty)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT (mode, subject, topic) DO UPDATE SET
+             unit = excluded.unit, notes = excluded.notes,
+             difficulty = excluded.difficulty, active = 1`,
+          [
+            body.mode.trim().toLowerCase(),
+            body.subject.trim(),
+            body.unit ? body.unit.trim() : null,
+            body.topic.trim(),
+            body.notes ? body.notes.trim() : null,
+            Math.min(3, Math.max(1, body.difficulty || 2))
+          ]
+        );
+        return json({ ok: true });
+      }
+
+      if (path === "/v1/modes" && request.method === "GET") {
+        const rows = await db.query(
+          `SELECT mode, COUNT(*) AS topics,
+                  SUM(active) AS active_topics
+             FROM syllabus GROUP BY mode ORDER BY mode`
+        );
+        return json({ modes: rows });
+      }
+
+      /* ---- stats ----------------------------------------------- */
+      if (path === "/v1/stats" && request.method === "GET") {
+        const mode = url.searchParams.get("mode");
+        const [overall] = await db.query(
+          `SELECT COUNT(*) AS answered, COALESCE(SUM(a.correct),0) AS correct
+             FROM attempts a
+             JOIN syllabus s ON s.id = a.syllabus_id
+            ${mode ? "WHERE s.mode = ?" : ""}`,
+          mode ? [mode] : []
+        );
+        const topics = await db.query(
+          `SELECT subject, topic, attempts, correct, accuracy
+             FROM topic_strength
+            WHERE attempts > 0 ${mode ? "AND mode = ?" : ""}
+            ORDER BY accuracy ASC, attempts DESC LIMIT 20`,
+          mode ? [mode] : []
+        );
+        return json({ overall, weakest: topics });
+      }
+
+      /* ---- manual top-up --------------------------------------- */
+      if (path === "/v1/topup" && request.method === "POST") {
+        const mode = body.mode || "jee";
+        // Each round costs ~6 external subrequests; the free plan allows 50.
+        const rounds = Math.min(4, Math.max(1, body.rounds || 1));
+        const results = [];
+        for (let i = 0; i < rounds; i++) results.push(await generateBatch(env, db, mode));
+        return json({ results, pool: await poolSize(db, mode) });
+      }
+
+      return json({ error: "not found" }, 404);
+    } catch (err) {
+      return json({ error: String(err.message || err) }, 500);
+    }
+  }
+};
