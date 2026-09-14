@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Shield Base -->
+    <path
+        android:fillColor="#4D72D9"
+        android:pathData="M54,26 L76,34 L76,54 C76,68 54,80 54,80 C54,80 32,68 32,54 L32,34 Z" />
+    <!-- Checkmark Emblem -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M47,60 L38,51 L41.5,47.5 L47,53 L66.5,33.5 L70,37 Z" />
+</vector>
