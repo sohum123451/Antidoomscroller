@@ -3,6 +3,8 @@ package com.checkpoint.app
 import android.content.Context
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
@@ -22,6 +24,8 @@ class QuestionOverlayActivity : AppCompatActivity() {
 
     private var currentQuestion: QuestionItem? = null
     private var answered = false
+    private var optionButtons = mutableListOf<Button>()
+    private val handler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,24 +39,31 @@ class QuestionOverlayActivity : AppCompatActivity() {
         btnContinue = findViewById(R.id.btnContinue)
 
         val reason = intent.getStringExtra("reason") ?: "reel"
-        tvHeaderReason.text = if (reason == "chat") "Five minutes of chat" else "Next reel"
-
-        val prefs = getSharedPreferences("checkpoint_prefs", Context.MODE_PRIVATE)
-        val mode = prefs.getString("mode", "jee") ?: "jee"
-        val apiUrl = prefs.getString("api_url", "https://checkpoint-api.sohum123451.workers.dev")
-        val authToken = prefs.getString("auth_token", null)
+        tvHeaderReason.text = if (reason == "chat") "Chat checkpoint" else "Next reel"
 
         btnContinue.setOnClickListener {
             finish()
         }
 
+        loadNextQuestion()
+    }
+
+    private fun loadNextQuestion() {
+        answered = false
+        tvExplanation.visibility = View.GONE
+        btnContinue.visibility = View.GONE
+        tvQuestionStem.text = "Loading question..."
+        containerOptions.removeAllViews()
+        optionButtons.clear()
+
+        val prefs = getSharedPreferences("checkpoint_prefs", Context.MODE_PRIVATE)
+        val mode = prefs.getString("mode", "jee") ?: "jee"
+        val apiUrl = prefs.getString("api_url", ApiClient.DEFAULT_API_URL)
+        val authToken = prefs.getString("auth_token", null)
+
         lifecycleScope.launch {
-            val q = ApiClient.getQuestion(apiUrl, authToken, mode)
-            if (q != null) {
-                displayQuestion(q, apiUrl, authToken)
-            } else {
-                finish()
-            }
+            val q = ApiClient.getQuestion(this@QuestionOverlayActivity, apiUrl, authToken, mode)
+            displayQuestion(q, apiUrl, authToken)
         }
     }
 
@@ -61,15 +72,25 @@ class QuestionOverlayActivity : AppCompatActivity() {
         tvTopic.text = q.label
         tvQuestionStem.text = q.stem
         containerOptions.removeAllViews()
+        optionButtons.clear()
+
+        val prefs = getSharedPreferences("checkpoint_prefs", Context.MODE_PRIVATE)
+        val answerDelaySec = prefs.getFloat("answer_delay_sec", 1.2f)
+        val requireNewOnWrong = prefs.getBoolean("require_new_on_wrong", true)
+        val delayMs = (answerDelaySec * 1000).toLong()
+
+        val labels = listOf("A", "B", "C", "D")
 
         q.options.forEachIndexed { index, optionText ->
             val btn = Button(this).apply {
-                text = "${listOf("A", "B", "C", "D").getOrElse(index) { "" }}.  $optionText"
+                text = "${labels.getOrElse(index) { "" }}.  $optionText"
                 textSize = 15f
                 setTextColor(Color.parseColor("#16223D"))
                 setBackgroundColor(Color.parseColor("#F0F4FA"))
                 setPadding(32, 24, 32, 24)
                 isAllCaps = false
+                isEnabled = delayMs <= 0 // Initially disabled if answer delay is configured
+
                 val params = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
@@ -83,17 +104,37 @@ class QuestionOverlayActivity : AppCompatActivity() {
                     answered = true
 
                     val isCorrect = index == q.answerIndex
+
+                    // Highlight choices
                     if (isCorrect) {
                         setBackgroundColor(Color.parseColor("#D1E7DD"))
                         setTextColor(Color.parseColor("#0F5132"))
                     } else {
                         setBackgroundColor(Color.parseColor("#F8D7DA"))
                         setTextColor(Color.parseColor("#842029"))
+
+                        // Highlight correct one in soft green
+                        val correctBtn = optionButtons.getOrNull(q.answerIndex)
+                        correctBtn?.setBackgroundColor(Color.parseColor("#D1E7DD"))
+                        correctBtn?.setTextColor(Color.parseColor("#0F5132"))
                     }
 
                     tvExplanation.visibility = View.VISIBLE
-                    tvExplanation.text = q.explanation
-                    btnContinue.visibility = View.VISIBLE
+                    tvExplanation.text = (if (isCorrect) "✓ Correct!\n\n" else "✗ Incorrect.\n\n") + q.explanation
+
+                    if (!isCorrect && requireNewOnWrong) {
+                        btnContinue.text = "Try Another Question"
+                        btnContinue.visibility = View.VISIBLE
+                        btnContinue.setOnClickListener {
+                            loadNextQuestion()
+                        }
+                    } else {
+                        btnContinue.text = "Continue to App"
+                        btnContinue.visibility = View.VISIBLE
+                        btnContinue.setOnClickListener {
+                            finish()
+                        }
+                    }
 
                     // Save local stats
                     updateLocalStats(isCorrect)
@@ -104,7 +145,31 @@ class QuestionOverlayActivity : AppCompatActivity() {
                     }
                 }
             }
+            optionButtons.add(btn)
             containerOptions.addView(btn)
+        }
+
+        // Handle answer delay timer to stop reflex tapping
+        if (delayMs > 0) {
+            val countdownView = TextView(this).apply {
+                text = "Answers unlock in ${String.format("%.1f", answerDelaySec)}s"
+                setTextColor(Color.parseColor("#8E99AF"))
+                textSize = 12f
+                textAlignment = View.TEXT_ALIGNMENT_CENTER
+                val params = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    setMargins(0, 8, 0, 8)
+                }
+                layoutParams = params
+            }
+            containerOptions.addView(countdownView)
+
+            handler.postDelayed({
+                optionButtons.forEach { it.isEnabled = true }
+                countdownView.visibility = View.GONE
+            }, delayMs)
         }
     }
 
@@ -121,5 +186,10 @@ class QuestionOverlayActivity : AppCompatActivity() {
             .putInt("stats_streak", streak)
             .putInt("stats_best_streak", bestStreak)
             .apply()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        handler.removeCallbacksAndMessages(null)
     }
 }
