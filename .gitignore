@@ -6,3 +6,5 @@ backup-*.sql
 .DS_Store
 Thumbs.db
 *.zip
+!dist/checkpoint-extension.zip
+!dist/checkpoint-android.apk

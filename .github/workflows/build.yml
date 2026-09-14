@@ -51,9 +51,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add dist/checkpoint-android.apk dist/checkpoint-extension.zip
+          git add -f dist/checkpoint-android.apk dist/checkpoint-extension.zip
           git commit -m "Auto-build Android APK and Extension ZIP [skip ci]" || echo "No changes to commit"
           git push
+
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
