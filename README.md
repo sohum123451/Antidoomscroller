@@ -10,7 +10,8 @@
 | Platform | Link | Setup Guide |
 | :--- | :--- | :--- |
 | **🌐 Chrome / Edge Extension** | [**👉 Download Extension (.zip)**](https://github.com/sohum123451/Antidoomscroller/raw/main/dist/checkpoint-extension.zip) | [Browser Setup Guide](#-chrome--edge-extension-guide) |
-| **🤖 Android App Project** | [**👉 View Android Source Code**](https://github.com/sohum123451/Antidoomscroller/tree/main/checkpoint-android) | [Android Setup Guide](#-android-installation-guide) |
+| **🤖 Android App (.apk)** | [**👉 Download Android APK (.apk)**](https://github.com/sohum123451/Antidoomscroller/raw/main/dist/checkpoint-android.apk) \| [**Release Asset Link**](https://github.com/sohum123451/Antidoomscroller/releases/download/v1.0.0/checkpoint-android.apk) | [Android Setup Guide](#-android-installation-guide) |
+| **📁 Android Source Code** | [**👉 View Android Project Source**](https://github.com/sohum123451/Antidoomscroller/tree/main/checkpoint-android) | [Android Setup Guide](#-android-installation-guide) |
 
 ---
 
@@ -30,13 +31,16 @@
 
 ## 🤖 Android App Guide
 
-The native Android app code is located in the [`checkpoint-android/`](https://github.com/sohum123451/Antidoomscroller/tree/main/checkpoint-android) directory.
+### Step 1: Download & Install APK
+1. Download the [**Checkpoint Android APK (.apk)**](https://github.com/sohum123451/Antidoomscroller/raw/main/dist/checkpoint-android.apk) on your Android phone.
+2. Tap the downloaded `.apk` file to install it (enable *"Install from unknown sources"* if prompted by your browser).
 
-### Step 1: Permissions Setup
+### Step 2: Permissions Setup
 1. Launch **Checkpoint** on your Android phone.
 2. Tap **Enable Accessibility Service** $\rightarrow$ select **Checkpoint Anti-Doomscroller** $\rightarrow$ toggle **ON**.
 3. Tap **Enable Display Over Apps** $\rightarrow$ find **Checkpoint** $\rightarrow$ toggle **ON**.
 4. Select your syllabus mode (**JEE** or **NEET**) and sign in with Google!
+
 
 🎉 Now when you open native **Instagram, YouTube Shorts, TikTok, WhatsApp, or Snapchat**, Checkpoint will prompt you with an interactive question gate before you keep scrolling!
 

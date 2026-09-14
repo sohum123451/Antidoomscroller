@@ -23,12 +23,16 @@ Links and step-by-step instructions for installing **Checkpoint (Anti-Doomscroll
 
 ## 📱 Option 2: Native Android App Installation
 
-### Source Code & Project Link
-👉 [**View Android App Code**](https://github.com/sohum123451/Antidoomscroller/tree/main/checkpoint-android)
+### Direct 1-Click APK Download Links
+👉 [**Download Checkpoint Android APK (.apk)**](https://github.com/sohum123451/Antidoomscroller/raw/main/dist/checkpoint-android.apk)  
+👉 [**Download from Release v1.0.0**](https://github.com/sohum123451/Antidoomscroller/releases/download/v1.0.0/checkpoint-android.apk)  
+👉 [**View Android Source Code**](https://github.com/sohum123451/Antidoomscroller/tree/main/checkpoint-android)
 
 ### Step-by-Step Setup:
-1. Launch **Checkpoint** on your phone.
-2. Grant the two required permissions:
+1. Download the `.apk` file above on your Android device and tap to install it.
+2. Launch **Checkpoint** on your phone.
+3. Grant the two required permissions:
    - **Accessibility Service**: Allows Checkpoint to detect when native reel/short apps are open.
    - **Display Over Apps**: Allows Checkpoint to show the question card on top of reels.
-3. Select your mode (**JEE** or **NEET**) and sign in with Google!
+4. Select your mode (**JEE** or **NEET**) and sign in with Google!
+
