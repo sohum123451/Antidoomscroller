@@ -2,7 +2,9 @@ name: Build Extension & Android APK
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - "copilot/**"
   workflow_dispatch:
 
 permissions:
@@ -48,6 +50,7 @@ jobs:
           path: checkpoint-android.apk
 
       - name: Commit Built APK to Repository
+        if: github.ref == 'refs/heads/main'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -57,6 +60,7 @@ jobs:
 
 
       - name: Create or Update GitHub Release
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.0
@@ -67,4 +71,3 @@ jobs:
             checkpoint-extension.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
