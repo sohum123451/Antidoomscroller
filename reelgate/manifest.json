@@ -27,7 +27,11 @@
     "*://*.discord.com/*",
     "*://web.telegram.org/*",
     "*://*.messenger.com/*",
-    "*://*.reddit.com/*"
+    "*://*.reddit.com/*",
+    "https://*.workers.dev/*",
+    "https://checkpoint-api.sohum123451.workers.dev/*",
+    "https://www.googleapis.com/*",
+    "https://accounts.google.com/*"
   ],
   "background": {
     "service_worker": "background.js"

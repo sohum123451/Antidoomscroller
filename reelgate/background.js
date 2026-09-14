@@ -55,8 +55,8 @@ async function getToken(interactive = false) {
     return { token: chromeToken.token, error: null };
   }
 
-  // Only fall back to launchWebAuthFlow if Edge / unsupported API
-  if (chromeToken.error && (chromeToken.error.includes("Edge") || chromeToken.error.includes("not supported"))) {
+  // If chrome.identity.getAuthToken failed (e.g. unpacked extension / missing client ID registration), fall back to launchWebAuthFlow
+  if (chromeToken.error && interactive) {
     const webAuth = await launchWebAuthFlow(interactive);
     if (webAuth.token) {
       await chrome.storage.local.set({ authToken: webAuth.token, tokenExpiry: Date.now() + 50 * 60 * 1000 });
@@ -191,7 +191,7 @@ async function fillBuffer(settings, want) {
 async function topUp() {
   const settings = await getSettings();
   if (!settings.apiUrl) return;
-  const token = await getToken(false);
+  const { token } = await getToken(false);
   if (!token) return;
 
   const buffer = await readBuffer();
@@ -256,7 +256,7 @@ async function pickQuestion() {
   const settings = await getSettings();
   let buffer = await readBuffer();
 
-  const token = await getToken(false);
+  const { token } = await getToken(false);
   if (settings.apiUrl && token && !buffer.length) {
     try {
       await fillBuffer(settings, settings.bufferTarget);
@@ -303,7 +303,7 @@ async function recordAnswer(msg) {
   s.byTopic[msg.topic] = t;
   await chrome.storage.local.set({ stats: s });
 
-  const token = await getToken(false);
+  const { token } = await getToken(false);
   if (msg.serverId && settings.apiUrl && token) {
     api(settings, "/v1/attempts", {
       method: "POST",
@@ -349,6 +349,27 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
           break;
         }
 
+        case "signInWithEmail": {
+          const email = (msg.email || "").trim();
+          if (!email || !email.includes("@")) throw new Error("Please enter a valid email address.");
+          const devToken = "dev:" + email;
+          await chrome.storage.local.set({ authToken: devToken, tokenExpiry: Date.now() + 30 * 24 * 60 * 60 * 1000 });
+          const me = await api(settings, "/v1/me", { retry: false, token: devToken });
+          if (me && me.user && me.user.mode) {
+            settings.mode = me.user.mode;
+            await chrome.storage.local.set({ settings });
+          }
+          await writeBuffer([]);
+          await topUp();
+          chrome.tabs.query({}, (tabs) => {
+            tabs.forEach((t) => {
+              chrome.tabs.sendMessage(t.id, { type: "signedIn" }).catch(() => {});
+            });
+          });
+          respond({ ok: true, me });
+          break;
+        }
+
         case "signOut": {
           const { token } = await getToken(false);
           if (token) await removeToken(token);
@@ -373,7 +394,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
           break;
 
         case "getSettings": {
-          const token = await getToken(false);
+          const { token } = await getToken(false);
           const { lastSync } = await chrome.storage.local.get("lastSync");
           respond({
             settings,
@@ -416,7 +437,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
 
         case "deleteAccount": {
           await api(settings, "/v1/me", { method: "DELETE" });
-          const token = await getToken(false);
+          const { token } = await getToken(false);
           if (token) await removeToken(token);
           await writeBuffer([]);
           respond({ ok: true });
@@ -427,7 +448,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
           const { stats } = await chrome.storage.local.get("stats");
           const local = Object.assign({}, DEFAULT_STATS, stats || {});
           let server = null;
-          const token = await getToken(false);
+          const { token } = await getToken(false);
           if (settings.apiUrl && token) {
             server = await api(settings, `/v1/stats?mode=${encodeURIComponent(settings.mode)}`).catch(() => null);
           }
@@ -442,8 +463,15 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
 
         case "testConnection":
           try {
-            await api(settings, "/v1/modes");
-            respond({ ok: true });
+            const url = (settings.apiUrl || "").replace(/\/+$/, "");
+            if (!url) throw new Error("Worker URL is not set");
+            const res = await fetch(url + "/v1/status");
+            if (res.ok) {
+              const data = await res.json().catch(() => ({}));
+              respond({ ok: true, data });
+            } else {
+              respond({ ok: false, error: `Server returned HTTP ${res.status}` });
+            }
           } catch (err) {
             respond({ ok: false, error: String(err.message) });
           }

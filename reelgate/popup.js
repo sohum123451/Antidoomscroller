@@ -117,9 +117,26 @@ function paintStats({ local, server }) {
       await refreshAuthUI();
       await loadModes();
     } else {
-      status(out ? out.error : "Sign in failed.", "bad");
+      status(out ? out.error : "Google sign in failed. Try 'Or enter account email'.", "bad");
     }
   });
+
+  const emailBtn = $("signInEmail");
+  if (emailBtn) {
+    emailBtn.addEventListener("click", async () => {
+      const email = prompt("Enter your Google / account email:");
+      if (!email) return;
+      status("Signing in…");
+      const out = await send({ type: "signInWithEmail", email });
+      if (out && out.ok) {
+        status("Signed in as " + email, "good");
+        await refreshAuthUI();
+        await loadModes();
+      } else {
+        status(out ? out.error : "Sign in failed", "bad");
+      }
+    });
+  }
 
   $("signOut").addEventListener("click", async () => {
     await send({ type: "signOut" });
@@ -152,7 +169,8 @@ function paintStats({ local, server }) {
     status("Checking connection…");
     const out = await send({ type: "testConnection" });
     if (out && out.ok) {
-      status("Connected.", "good");
+      const qCount = out.data && out.data.questions !== undefined ? ` (${out.data.questions} questions in pool)` : "";
+      status("Connected to Worker" + qCount + ".", "good");
       await loadModes();
       await refreshAuthUI();
     } else {
