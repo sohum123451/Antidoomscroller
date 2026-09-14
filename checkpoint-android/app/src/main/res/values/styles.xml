@@ -7,7 +7,7 @@
         <item name="android:statusBarColor">@color/primary_dark</item>
     </style>
 
-    <style name="Theme.Checkpoint.Overlay" parent="Theme.AppCompat.Translucent.NoTitleBar">
+    <style name="Theme.Checkpoint.Overlay" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowIsTranslucent">true</item>
